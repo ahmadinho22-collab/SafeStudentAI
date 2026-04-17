@@ -1,39 +1,49 @@
 import streamlit as st
 import google.generativeai as genai
-import os
 
-# إعداد مفتاح الـ API من إعدادات الموقع السرية
-api_key = st.secrets["GEMINI_API_KEY"]
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
+# إعداد واجهة الموقع
 st.set_page_config(page_title="المساعد الدراسي الآمن", layout="centered")
 st.title("🤖 مساعد الطالب الذكي")
 
-# تعليمات الرقابة
-SYSTEM_PROMPT = "أنت مساعد دراسي. إذا لاحظت أي إشارة لتحرش أو عنف أو تنمر، ابدأ ردك بكلمة [ALERT] ثم ساعد الطالب."
+# جلب المفتاح بأمان
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+else:
+    st.error("المفتاح غير موجود في Secrets!")
+    st.stop()
+
+# تعريف الموديل (استخدمنا flash لأنه الأسرع والأكثر توفراً)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# عرض المحادثة
 for message in st.session_state.messages:
-    if not message["content"].startswith("[ALERT]"):
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-if prompt := st.chat_input("كيف أساعدك في دروسك اليوم؟"):
+# إدخال الطالب
+if prompt := st.chat_input("كيف أساعدك اليوم؟"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    response = model.generate_content(f"{SYSTEM_PROMPT} \n الطالب: {prompt}")
+    # تعليمات الرقابة مدمجة في الطلب
+    full_prompt = f"أنت مساعد دراسي. إذا كان كلام الطالب يحتوي على (تحرش، عنف، تنمر) ابدأ ردك بكلمة [ALERT]. الطالب يقول: {prompt}"
     
-    if "[ALERT]" in response.text:
-        st.error("⚠️ تنبيه: تم رصد محتوى حساس. سيتم توجيهك للمختصين لحمايتك.")
-        full_res = response.text.replace("[ALERT]", "")
-    else:
-        full_res = response.text
-
-    with st.chat_message("assistant"):
-        st.markdown(full_res)
-    st.session_state.messages.append({"role": "assistant", "content": full_res})
+    try:
+        response = model.generate_content(full_prompt)
+        ai_response = response.text
+        
+        # نظام التنبيه
+        if "[ALERT]" in ai_response:
+            st.warning("⚠️ نظام الحماية: تم رصد محتوى حساس. سيتم إبلاغ الإدارة لضمان سلامتك.")
+            ai_response = ai_response.replace("[ALERT]", "")
+        
+        with st.chat_message("assistant"):
+            st.markdown(ai_response)
+        st.session_state.messages.append({"role": "assistant", "content": ai_response})
+        
+    except Exception as e:
+        st.error(f"حدث خطأ: {e}")
