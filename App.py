@@ -1,44 +1,46 @@
 import streamlit as st
 import google.generativeai as genai
 
-# إعداد واجهة الموقع
+# إعدادات الصفحة
 st.set_page_config(page_title="المساعد الدراسي الآمن", layout="centered")
 st.title("🤖 مساعد الطالب الذكي")
 
-# جلب المفتاح بأمان
+# جلب المفتاح من Secrets
 if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    api_key = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=api_key)
 else:
-    st.error("المفتاح غير موجود في Secrets!")
+    st.error("لم يتم العثور على مفتاح API في الإعدادات.")
     st.stop()
 
-# تعريف الموديل (استخدمنا flash لأنه الأسرع والأكثر توفراً)
+# تعريف الموديل (تأكد من الحروف الصغيرة تماماً)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+# تهيئة سجل المحادثة
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# عرض المحادثة
+# عرض الرسائل القديمة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# إدخال الطالب
-if prompt := st.chat_input("كيف أساعدك اليوم؟"):
+# استقبال رسالة الطالب
+if prompt := st.chat_input("كيف أساعدك في دروسك اليوم؟"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # تعليمات الرقابة مدمجة في الطلب
-    full_prompt = f"أنت مساعد دراسي. إذا كان كلام الطالب يحتوي على (تحرش، عنف، تنمر) ابدأ ردك بكلمة [ALERT]. الطالب يقول: {prompt}"
-    
+    # طلب الرد من الموديل
     try:
+        # تعليمات الرقابة مدمجة
+        full_prompt = f"أنت مساعد دراسي. إذا كان كلام الطالب يحتوي على (عنف، تنمر، تحرش) ابدأ ردك بـ [ALERT]. الطالب يقول: {prompt}"
+        
         response = model.generate_content(full_prompt)
         ai_response = response.text
         
-        # نظام التنبيه
         if "[ALERT]" in ai_response:
-            st.warning("⚠️ نظام الحماية: تم رصد محتوى حساس. سيتم إبلاغ الإدارة لضمان سلامتك.")
+            st.warning("⚠️ تنبيه أمني: تم رصد محتوى حساس. نحن نهتم بسلامتك.")
             ai_response = ai_response.replace("[ALERT]", "")
         
         with st.chat_message("assistant"):
@@ -46,4 +48,4 @@ if prompt := st.chat_input("كيف أساعدك اليوم؟"):
         st.session_state.messages.append({"role": "assistant", "content": ai_response})
         
     except Exception as e:
-        st.error(f"حدث خطأ: {e}")
+        st.error(f"حدث خطأ في الاتصال: {e}")
